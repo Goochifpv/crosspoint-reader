@@ -34,7 +34,7 @@
 #include "SdCardFontSystem.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
-#include "activities/pocket/PocketReaderTestActivity.h"
+#include "activities/pocket/PocketReaderGameActivity.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -540,7 +540,7 @@ void setup() {
     // Pocket Reader X4 hardware prototype.
     // Hold BACK during boot to bypass this and enter stock CrossPoint.
     activityManager.replaceActivity(
-        std::make_unique<PocketReaderTestActivity>(renderer, mappedInputManager));
+        std::make_unique<PocketReaderGameActivity>(renderer, mappedInputManager));
   } else if (resume == BootResume::Silent && snapshotTarget == SILENT_REBOOT_TARGET_READER &&
              !APP_STATE.openEpubPath.empty()) {
     activityManager.goToReader(APP_STATE.openEpubPath);
@@ -791,6 +791,7 @@ void loop() {
     }
   }
 }
+
 
 
 
