@@ -537,7 +537,7 @@ void setup() {
     // If we rebooted from a panic, go to crash report screen to show the panic info
     activityManager.goToCrashReport();
   } else if (!mappedInputManager.isPressed(MappedInputManager::Button::Back)) {
-    // Pocket Reader X4 hardware prototype.
+    // Pocket Reader X4 v19 game.
     // Hold BACK during boot to bypass this and enter stock CrossPoint.
     activityManager.replaceActivity(
         std::make_unique<PocketReaderGameActivity>(renderer, mappedInputManager));
@@ -791,6 +791,7 @@ void loop() {
     }
   }
 }
+
 
 
 

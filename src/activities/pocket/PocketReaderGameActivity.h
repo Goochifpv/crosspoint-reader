@@ -1,7 +1,5 @@
 #pragma once
 
-#include <string>
-
 #include "MappedInputManager.h"
 #include "activities/Activity.h"
 
@@ -14,21 +12,46 @@ class PocketReaderGameActivity final : public Activity {
   void loop() override;
 
  private:
-  bool hasEvent = false;
-  std::string statusMessage;
+  enum class ViewMode {
+    Event,
+    Locations,
+    LeaveConfirm,
+    ReplayConfirm
+  };
 
-  void drawGame();
-  void grantDevPages();
-  void performNextStep();
+  bool gameLoaded = false;
+  ViewMode viewMode = ViewMode::Event;
 
-  const char* backgroundForLocation(int location) const;
-  bool overlayAtTopForLocation(int location) const;
+  int selectedLocationPosition = 0;
+  int pendingTargetLocation = -1;
 
-  bool drawSceneBitmap(const char* path);
-  void drawOverlay();
+  void initializeGameIfNeeded();
+  void ensureReadyEvent();
+
+  void addDevelopmentPages();
+
+  void showCurrentEvent();
+  bool drawEventBitmap(const char* path);
   void drawMissingAssetMessage(const char* path);
 
-  std::string eventTitle() const;
-  std::string eventBody() const;
-  std::string eventResultBlock() const;
+  void takeDirection(int direction);
+
+  void showLocations();
+  void moveLocationSelection(int delta);
+  void chooseSelectedLocation();
+
+  void showLeaveConfirmation(int targetLocation);
+  void confirmLeaveAndSwitch();
+
+  void showReplayConfirmation(int targetLocation);
+  void confirmReplay();
+
+  void activateLocation(int location, bool deliberateReplay);
+  void setReadyEventForCurrentLocation();
+  void setNewAdventureEventForCurrentLocation();
+  void setNoStepsEvent();
+
+  void drawLocationsScreen();
+  void drawLeaveConfirmScreen();
+  void drawReplayConfirmScreen();
 };
