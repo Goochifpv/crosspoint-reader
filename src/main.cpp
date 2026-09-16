@@ -32,6 +32,7 @@
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
+#include "activities/pocket/PocketPrototypeActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "images/LoadingIcon.h"
@@ -392,12 +393,16 @@ void setup() {
 
   // SD Card Initialization
   // We need 6 open files concurrently when parsing a new chapter
-  if (!Storage.begin()) {
-    LOG_ERR("MAIN", "SD card initialization failed");
-    setupDisplayAndFonts(isSilentReboot);
-    activityManager.goToFullScreenMessage("SD card error", EpdFontFamily::BOLD);
-    return;
-  }
+if (!Storage.begin()) {
+  LOG_ERR("MAIN", "SD card initialization failed");
+  setupDisplayAndFonts(isSilentReboot);
+
+  activityManager.goToFullScreenMessage(
+      "POCKET TESTBED",
+      EpdFontFamily::BOLD);
+
+  return;
+}
 
   HalSystem::checkPanic();
 
@@ -604,6 +609,7 @@ void loop() {
 
   renderer.setFadingFix(SETTINGS.fadingFix);
 
+  #ifdef ENABLE_SERIAL_LOG
   if (Serial && millis() - lastMemPrint >= 10000) {
     const auto heap = HalMemory::getInternalHeap();
     LOG_INF("MEM", "Free: %zu bytes, Total: %zu bytes, Min Free: %zu bytes, MaxAlloc: %zu bytes", heap.freeBytes,
@@ -615,7 +621,7 @@ void loop() {
 #endif
     lastMemPrint = millis();
   }
-
+#endif
   // Handle incoming serial commands,
   // nb: we use logSerial from logging to avoid deprecation warnings
   if (logSerial.available() > 0) {
