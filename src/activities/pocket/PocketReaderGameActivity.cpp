@@ -270,7 +270,7 @@ void drawEventFooter(GfxRenderer& renderer) {
   if (!eastAllowed) eastLabel += " X";
 
   drawBottomFrontButton(renderer, 0, "BACK");
-  drawBottomFrontButton(renderer, 1, "+100P");
+  drawBottomFrontButton(renderer, 1, "TEAM");
   drawBottomFrontButton(renderer, 2, westLabel.c_str(), !westAllowed);
   drawBottomFrontButton(renderer, 3, eastLabel.c_str(), !eastAllowed);
 }
@@ -675,9 +675,8 @@ void PocketReaderGameActivity::loop() {
       return;
     }
 
-    // Temporary hidden development shortcut.
     if (mappedInput.wasPressed(Button::Confirm)) {
-      addDevelopmentPages();
+      showTeamRoster(ViewMode::Event);
       return;
     }
 
@@ -726,6 +725,71 @@ void PocketReaderGameActivity::loop() {
 
     if (mappedInput.wasPressed(Button::Confirm)) {
       chooseSelectedLocation();
+      return;
+    }
+
+    if (mappedInput.wasPressed(Button::Left)) {
+      showTeamRoster(ViewMode::Locations);
+      return;
+    }
+
+    if (mappedInput.wasPressed(Button::Right)) {
+      addDevelopmentPagesFromLocations();
+      return;
+    }
+
+    return;
+  }
+
+  // ==================================================
+  // TEAM ROSTER
+  // ==================================================
+  if (viewMode == ViewMode::TeamRoster) {
+    if (mappedInput.wasPressed(Button::Back)) {
+      if (swapSourceSelection >= 0) {
+        cancelSwap();
+      } else {
+        returnFromRoster();
+      }
+      return;
+    }
+
+    if (mappedInput.wasPressed(Button::Up)) {
+      moveRosterSelection(-1);
+      return;
+    }
+
+    if (mappedInput.wasPressed(Button::Down)) {
+      moveRosterSelection(+1);
+      return;
+    }
+
+    if (mappedInput.wasPressed(Button::Confirm)) {
+      openSelectedCompanionDetail();
+      return;
+    }
+
+    if (mappedInput.wasPressed(Button::Left)) {
+      beginOrCompleteSwap();
+      return;
+    }
+
+    if (mappedInput.wasPressed(Button::Right)) {
+      changeReservePage(+1);
+      return;
+    }
+
+    return;
+  }
+
+  // ==================================================
+  // COMPANION DETAIL
+  // ==================================================
+  if (viewMode == ViewMode::CompanionDetail) {
+    if (mappedInput.wasPressed(Button::Back) ||
+        mappedInput.wasPressed(Button::Confirm)) {
+      viewMode = ViewMode::TeamRoster;
+      drawTeamRosterScreen();
       return;
     }
 
@@ -850,6 +914,12 @@ void PocketReaderGameActivity::addDevelopmentPages() {
   showCurrentEvent();
 }
 
+void PocketReaderGameActivity::addDevelopmentPagesFromLocations() {
+  addPagesRead(100);
+  saveGame();
+  drawLocationsScreen();
+}
+
 
 void PocketReaderGameActivity::takeDirection(const int direction) {
   if (!directionAllowed(direction)) {
@@ -950,6 +1020,197 @@ void PocketReaderGameActivity::chooseSelectedLocation() {
   }
 
   activateLocation(target, false);
+}
+
+
+void PocketReaderGameActivity::showTeamRoster(const ViewMode returnMode) {
+  rosterReturnMode = returnMode;
+  swapSourceSelection = -1;
+
+  const int maxSelection =
+      std::max(0, TEAM_SIZE + reserveCount - 1);
+
+  rosterSelection =
+      std::max(0, std::min(maxSelection, rosterSelection));
+
+  if (rosterSelection >= TEAM_SIZE) {
+    reservePage = (rosterSelection - TEAM_SIZE) / 5;
+  } else {
+    reservePage = 0;
+  }
+
+  viewMode = ViewMode::TeamRoster;
+  drawTeamRosterScreen();
+}
+
+void PocketReaderGameActivity::returnFromRoster() {
+  swapSourceSelection = -1;
+
+  if (rosterReturnMode == ViewMode::Locations) {
+    viewMode = ViewMode::Locations;
+    drawLocationsScreen();
+    return;
+  }
+
+  viewMode = ViewMode::Event;
+  showCurrentEvent();
+}
+
+void PocketReaderGameActivity::moveRosterSelection(const int delta) {
+  const int totalItems =
+      TEAM_SIZE + reserveCount;
+
+  if (totalItems <= 0) return;
+
+  rosterSelection += delta;
+
+  if (rosterSelection < 0) {
+    rosterSelection = totalItems - 1;
+  }
+
+  if (rosterSelection >= totalItems) {
+    rosterSelection = 0;
+  }
+
+  if (rosterSelection >= TEAM_SIZE) {
+    reservePage =
+        (rosterSelection - TEAM_SIZE) / 5;
+  }
+
+  drawTeamRosterScreen();
+}
+
+void PocketReaderGameActivity::changeReservePage(const int delta) {
+  constexpr int RESERVE_ROWS_PER_PAGE = 5;
+
+  const int collectionRows =
+      reserveCount + lockedCompanionCount();
+
+  const int pageCount =
+      std::max(
+          1,
+          (collectionRows + RESERVE_ROWS_PER_PAGE - 1) /
+              RESERVE_ROWS_PER_PAGE);
+
+  reservePage += delta;
+
+  if (reservePage < 0) reservePage = pageCount - 1;
+  if (reservePage >= pageCount) reservePage = 0;
+
+  const int firstCollectionRow =
+      reservePage * RESERVE_ROWS_PER_PAGE;
+
+  // If this page begins with an unlocked reserve, select it.
+  // Locked silhouettes are browse-only and cannot be selected/swapped.
+  if (firstCollectionRow < reserveCount) {
+    rosterSelection =
+        TEAM_SIZE + firstCollectionRow;
+  } else {
+    // Keep an obvious valid selection visible in ACTIVE while browsing
+    // pages made entirely from locked collection slots.
+    rosterSelection = 0;
+  }
+
+  drawTeamRosterScreen();
+}
+
+int PocketReaderGameActivity::selectedRosterIndex() const {
+  static const int VISUAL_ROLE_ORDER[TEAM_SIZE] = {
+      ROLE_STRENGTH,
+      ROLE_HEART,
+      ROLE_LUCK,
+  };
+
+  if (rosterSelection < 0) return -1;
+
+  if (rosterSelection < TEAM_SIZE) {
+    const int role =
+        VISUAL_ROLE_ORDER[rosterSelection];
+
+    return teamSlots[role];
+  }
+
+  return reserveMemberAt(
+      rosterSelection - TEAM_SIZE);
+}
+
+void PocketReaderGameActivity::cancelSwap() {
+  swapSourceSelection = -1;
+  drawTeamRosterScreen();
+}
+
+void PocketReaderGameActivity::beginOrCompleteSwap() {
+  const int totalItems =
+      TEAM_SIZE + reserveCount;
+
+  if (totalItems <= 1) return;
+
+  if (swapSourceSelection < 0) {
+    swapSourceSelection = rosterSelection;
+    drawTeamRosterScreen();
+    return;
+  }
+
+  if (swapSourceSelection == rosterSelection) {
+    swapSourceSelection = -1;
+    drawTeamRosterScreen();
+    return;
+  }
+
+  static const int VISUAL_ROLE_ORDER[TEAM_SIZE] = {
+      ROLE_STRENGTH,
+      ROLE_HEART,
+      ROLE_LUCK,
+  };
+
+  const bool sourceActive =
+      swapSourceSelection < TEAM_SIZE;
+
+  const bool targetActive =
+      rosterSelection < TEAM_SIZE;
+
+  bool swapped = false;
+
+  if (sourceActive && targetActive) {
+    swapped =
+        swapActiveRoles(
+            VISUAL_ROLE_ORDER[swapSourceSelection],
+            VISUAL_ROLE_ORDER[rosterSelection]);
+  } else if (sourceActive && !targetActive) {
+    swapped =
+        swapActiveWithReserve(
+            VISUAL_ROLE_ORDER[swapSourceSelection],
+            rosterSelection - TEAM_SIZE);
+  } else if (!sourceActive && targetActive) {
+    swapped =
+        swapActiveWithReserve(
+            VISUAL_ROLE_ORDER[rosterSelection],
+            swapSourceSelection - TEAM_SIZE);
+  } else {
+    swapped =
+        swapReservePositions(
+            swapSourceSelection - TEAM_SIZE,
+            rosterSelection - TEAM_SIZE);
+  }
+
+  if (swapped) {
+    saveGame();
+  }
+
+  swapSourceSelection = -1;
+  drawTeamRosterScreen();
+}
+
+void PocketReaderGameActivity::openSelectedCompanionDetail() {
+  detailRosterIndex = selectedRosterIndex();
+
+  if (detailRosterIndex < 0 ||
+      detailRosterIndex >= ROSTER_SIZE) {
+    return;
+  }
+
+  viewMode = ViewMode::CompanionDetail;
+  drawCompanionDetailScreen();
 }
 
 void PocketReaderGameActivity::showLeaveConfirmation(const int targetLocation) {
@@ -1173,7 +1434,7 @@ void PocketReaderGameActivity::drawLocationsScreen() {
       LOC_FOOTER_Y - 8,
       true);
 
-  const char* locLabels[4] = {"BACK", "SELECT", "", ""};
+  const char* locLabels[4] = {"BACK", "SELECT", "TEAM", "+100P"};
 
   for (int i = 0; i < 4; i++) {
     const int x = LOC_FOOTER_X + (i * LOC_SEG_W);
@@ -1192,6 +1453,534 @@ void PocketReaderGameActivity::drawLocationsScreen() {
         locLabels[i],
         true);
   }
+
+  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+}
+
+
+void PocketReaderGameActivity::drawTeamRosterScreen() {
+  RenderLock lock(*this);
+
+  renderer.setRenderMode(GfxRenderer::BW);
+  renderer.clearScreen();
+
+  constexpr int RESERVE_ROWS_PER_PAGE = 5;
+  static const int VISUAL_ROLE_ORDER[TEAM_SIZE] = {
+      ROLE_STRENGTH,
+      ROLE_HEART,
+      ROLE_LUCK,
+  };
+
+  renderer.drawCenteredText(
+      NOTOSERIF_18_FONT_ID,
+      24,
+      "TEAM ROSTER",
+      true,
+      EpdFontFamily::BOLD);
+
+  std::string collection =
+      std::to_string(unlockedCompanionCount);
+  collection += "/32 companions";
+  collection += "  |  Locked ";
+  collection += std::to_string(lockedCompanionCount());
+
+  renderer.drawCenteredText(
+      UI_10_FONT_ID,
+      58,
+      collection.c_str(),
+      true);
+
+  renderer.drawLine(14, 82, SCREEN_W - 14, 82, true);
+
+  renderer.drawText(
+      UI_10_FONT_ID,
+      20,
+      94,
+      "ACTIVE",
+      true,
+      EpdFontFamily::BOLD);
+
+  constexpr int ACTIVE_X = 20;
+  constexpr int ACTIVE_W = 440;
+  constexpr int ACTIVE_H = 58;
+  constexpr int ACTIVE_Y = 116;
+  constexpr int ACTIVE_STEP = 64;
+
+  for (int visual = 0; visual < TEAM_SIZE; visual++) {
+    const int role = VISUAL_ROLE_ORDER[visual];
+    const int member = teamSlots[role];
+    const int y = ACTIVE_Y + (visual * ACTIVE_STEP);
+    const bool selected = rosterSelection == visual;
+    const bool swapSource = swapSourceSelection == visual;
+
+    renderer.fillRoundedRect(
+        ACTIVE_X,
+        y,
+        ACTIVE_W,
+        ACTIVE_H,
+        8,
+        selected ? Color::LightGray : Color::White);
+
+    renderer.drawRoundedRect(
+        ACTIVE_X,
+        y,
+        ACTIVE_W,
+        ACTIVE_H,
+        swapSource ? 2 : 1,
+        8,
+        true);
+
+    renderer.fillRoundedRect(
+        ACTIVE_X + 9,
+        y + 9,
+        40,
+        40,
+        6,
+        Color::White);
+
+    renderer.drawRoundedRect(
+        ACTIVE_X + 9,
+        y + 9,
+        40,
+        40,
+        1,
+        6,
+        true);
+
+    std::string initial =
+        roster[member].name.substring(0, 1).c_str();
+
+    renderer.drawCenteredText(
+        NOTOSERIF_14_FONT_ID,
+        y + 18,
+        initial.c_str(),
+        true,
+        EpdFontFamily::BOLD);
+
+    std::string name =
+        roster[member].name.c_str();
+
+    renderer.drawText(
+        NOTOSERIF_12_FONT_ID,
+        ACTIVE_X + 60,
+        y + 7,
+        name.c_str(),
+        true,
+        EpdFontFamily::BOLD);
+
+    std::string roleLine =
+        roleShort(role).c_str();
+    roleLine += " ";
+    roleLine += std::to_string(effectiveRoleLevel(member, role));
+    roleLine += "  | XP ";
+    roleLine += std::to_string(currentRoleXP(member, role));
+    roleLine += "/";
+    roleLine += std::to_string(roleXPThreshold(member, role));
+
+    if (roster[member].restSteps > 0) {
+      roleLine += "  | REST ";
+      roleLine += std::to_string(roster[member].restSteps);
+    } else {
+      roleLine += "  | READY";
+    }
+
+    renderer.drawText(
+        UI_10_FONT_ID,
+        ACTIVE_X + 60,
+        y + 34,
+        roleLine.c_str(),
+        true);
+  }
+
+  const int reserveHeaderY = 318;
+
+  renderer.drawText(
+      UI_10_FONT_ID,
+      20,
+      reserveHeaderY,
+      "RESERVE",
+      true,
+      EpdFontFamily::BOLD);
+
+  constexpr int RES_X = 20;
+  constexpr int RES_W = 440;
+  constexpr int RES_H = 61;
+  constexpr int RES_Y = 340;
+  constexpr int RES_STEP = 67;
+
+  const int collectionRows =
+      reserveCount + lockedCompanionCount();
+
+  const int pageCount =
+      std::max(
+          1,
+          (collectionRows + RESERVE_ROWS_PER_PAGE - 1) /
+              RESERVE_ROWS_PER_PAGE);
+
+  std::string pageText = "Page ";
+  pageText += std::to_string(reservePage + 1);
+  pageText += "/";
+  pageText += std::to_string(pageCount);
+
+  renderer.drawText(
+      UI_10_FONT_ID,
+      SCREEN_W - 20 - renderer.getTextWidth(UI_10_FONT_ID, pageText.c_str()),
+      reserveHeaderY,
+      pageText.c_str(),
+      true);
+
+  const int first =
+      reservePage * RESERVE_ROWS_PER_PAGE;
+
+  for (int row = 0; row < RESERVE_ROWS_PER_PAGE; row++) {
+    const int collectionPosition =
+        first + row;
+
+    if (collectionPosition >= collectionRows) break;
+
+    const int y =
+        RES_Y + (row * RES_STEP);
+
+    const bool unlockedReserve =
+        collectionPosition < reserveCount;
+
+    if (unlockedReserve) {
+      const int member =
+          reserveMemberAt(collectionPosition);
+
+      const int selection =
+          TEAM_SIZE + collectionPosition;
+
+      const bool selected =
+          rosterSelection == selection;
+
+      const bool swapSource =
+          swapSourceSelection == selection;
+
+      renderer.fillRoundedRect(
+          RES_X,
+          y,
+          RES_W,
+          RES_H,
+          8,
+          selected ? Color::LightGray : Color::White);
+
+      renderer.drawRoundedRect(
+          RES_X,
+          y,
+          RES_W,
+          RES_H,
+          swapSource ? 2 : 1,
+          8,
+          true);
+
+      renderer.fillRoundedRect(
+          RES_X + 9,
+          y + 10,
+          38,
+          38,
+          6,
+          Color::White);
+
+      renderer.drawRoundedRect(
+          RES_X + 9,
+          y + 10,
+          38,
+          38,
+          1,
+          6,
+          true);
+
+      std::string initial =
+          roster[member].name.substring(0, 1).c_str();
+
+      renderer.drawCenteredText(
+          NOTOSERIF_14_FONT_ID,
+          y + 19,
+          initial.c_str(),
+          true,
+          EpdFontFamily::BOLD);
+
+      renderer.drawText(
+          NOTOSERIF_12_FONT_ID,
+          RES_X + 58,
+          y + 7,
+          roster[member].name.c_str(),
+          true,
+          EpdFontFamily::BOLD);
+
+      std::string info = "Level ";
+      info += std::to_string(overallLevel(member));
+      info += "  | S";
+      info += std::to_string(effectiveRoleLevel(member, ROLE_STRENGTH));
+      info += " H";
+      info += std::to_string(effectiveRoleLevel(member, ROLE_HEART));
+      info += " L";
+      info += std::to_string(effectiveRoleLevel(member, ROLE_LUCK));
+
+      renderer.drawText(
+          UI_10_FONT_ID,
+          RES_X + 58,
+          y + 35,
+          info.c_str(),
+          true);
+    } else {
+      // Locked collection slot. Identity stays hidden until the companion
+      // is actually unlocked.
+      renderer.fillRoundedRect(
+          RES_X,
+          y,
+          RES_W,
+          RES_H,
+          8,
+          Color::White);
+
+      renderer.drawRoundedRect(
+          RES_X,
+          y,
+          RES_W,
+          RES_H,
+          1,
+          8,
+          true);
+
+      renderer.fillRoundedRect(
+          RES_X + 9,
+          y + 10,
+          38,
+          38,
+          6,
+          Color::LightGray);
+
+      renderer.drawRoundedRect(
+          RES_X + 9,
+          y + 10,
+          38,
+          38,
+          1,
+          6,
+          true);
+
+      renderer.drawCenteredText(
+          NOTOSERIF_14_FONT_ID,
+          y + 19,
+          "?",
+          true,
+          EpdFontFamily::BOLD);
+
+      renderer.drawText(
+          NOTOSERIF_12_FONT_ID,
+          RES_X + 58,
+          y + 7,
+          "???",
+          true,
+          EpdFontFamily::BOLD);
+
+      renderer.drawText(
+          UI_10_FONT_ID,
+          RES_X + 58,
+          y + 35,
+          "LOCKED",
+          true,
+          EpdFontFamily::BOLD);
+    }
+  }
+
+  drawSideControlPill(renderer, 340, "UP", true);
+  drawSideControlPill(renderer, 440, "DOWN", true);
+
+  constexpr int FOOT_Y = 748;
+  constexpr int FOOT_X = 14;
+  constexpr int FOOT_W = 452;
+  constexpr int SEG_W = FOOT_W / 4;
+
+  renderer.drawLine(
+      FOOT_X,
+      FOOT_Y - 8,
+      SCREEN_W - 14,
+      FOOT_Y - 8,
+      true);
+
+  const char* labelsNormal[4] = {
+      "BACK",
+      "DETAILS",
+      "SWAP",
+      "COLLECT",
+  };
+
+  const char* labelsSwap[4] = {
+      "CANCEL",
+      "DETAILS",
+      "PLACE",
+      "COLLECT",
+  };
+
+  const char** labels =
+      swapSourceSelection >= 0
+          ? labelsSwap
+          : labelsNormal;
+
+  for (int i = 0; i < 4; i++) {
+    const int x = FOOT_X + (i * SEG_W);
+    const int tw =
+        renderer.getTextWidth(SMALL_FONT_ID, labels[i]);
+
+    renderer.drawText(
+        SMALL_FONT_ID,
+        x + ((SEG_W - tw) / 2),
+        FOOT_Y,
+        labels[i],
+        true);
+  }
+
+  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+}
+
+void PocketReaderGameActivity::drawCompanionDetailScreen() {
+  RenderLock lock(*this);
+
+  renderer.setRenderMode(GfxRenderer::BW);
+  renderer.clearScreen();
+
+  const int member = detailRosterIndex;
+
+  if (member < 0 || member >= ROSTER_SIZE) {
+    viewMode = ViewMode::TeamRoster;
+    drawTeamRosterScreen();
+    return;
+  }
+
+  renderer.drawCenteredText(
+      NOTOSERIF_18_FONT_ID,
+      28,
+      roster[member].name.c_str(),
+      true,
+      EpdFontFamily::BOLD);
+
+  std::string subtitle =
+      companionIsSpecial(member)
+          ? "SPECIAL COMPANION"
+          : "COMPANION";
+
+  renderer.drawCenteredText(
+      UI_10_FONT_ID,
+      66,
+      subtitle.c_str(),
+      true);
+
+  renderer.drawLine(14, 92, SCREEN_W - 14, 92, true);
+
+  renderer.fillRoundedRect(
+      155,
+      120,
+      170,
+      170,
+      16,
+      Color::White);
+
+  renderer.drawRoundedRect(
+      155,
+      120,
+      170,
+      170,
+      2,
+      16,
+      true);
+
+  std::string initial =
+      roster[member].name.substring(0, 1).c_str();
+
+  renderer.drawCenteredText(
+      NOTOSERIF_18_FONT_ID,
+      188,
+      initial.c_str(),
+      true,
+      EpdFontFamily::BOLD);
+
+  std::string level = "Overall Level ";
+  level += std::to_string(overallLevel(member));
+
+  renderer.drawCenteredText(
+      NOTOSERIF_14_FONT_ID,
+      320,
+      level.c_str(),
+      true,
+      EpdFontFamily::BOLD);
+
+  static const int roles[TEAM_SIZE] = {
+      ROLE_STRENGTH,
+      ROLE_HEART,
+      ROLE_LUCK,
+  };
+
+  int y = 390;
+
+  for (int i = 0; i < TEAM_SIZE; i++) {
+    const int role = roles[i];
+
+    std::string line =
+        roleName(role).c_str();
+    line += "  ";
+    line += std::to_string(baseRoleLevel(member, role));
+    line += " + ";
+    line += std::to_string(earnedRoleLevel(member, role));
+    line += " = ";
+    line += std::to_string(effectiveRoleLevel(member, role));
+
+    renderer.drawCenteredText(
+        NOTOSERIF_12_FONT_ID,
+        y,
+        line.c_str(),
+        true,
+        EpdFontFamily::BOLD);
+
+    y += 29;
+
+    std::string xp = "XP ";
+    xp += std::to_string(currentRoleXP(member, role));
+    xp += "/";
+    xp += std::to_string(roleXPThreshold(member, role));
+
+    renderer.drawCenteredText(
+        UI_10_FONT_ID,
+        y,
+        xp.c_str(),
+        true);
+
+    y += 52;
+  }
+
+  std::string readiness =
+      roster[member].restSteps > 0
+          ? "Resting - "
+          : "Ready";
+
+  if (roster[member].restSteps > 0) {
+    readiness += std::to_string(roster[member].restSteps);
+    readiness += " steps";
+  }
+
+  renderer.drawCenteredText(
+      NOTOSERIF_12_FONT_ID,
+      610,
+      readiness.c_str(),
+      true,
+      EpdFontFamily::BOLD);
+
+  renderer.drawLine(14, 740, SCREEN_W - 14, 740, true);
+
+  renderer.drawText(
+      SMALL_FONT_ID,
+      28,
+      748,
+      "BACK",
+      true);
+
+  renderer.drawCenteredText(
+      SMALL_FONT_ID,
+      748,
+      "CONFIRM = BACK",
+      true);
 
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 }

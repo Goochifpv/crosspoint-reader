@@ -15,6 +15,8 @@ class PocketReaderGameActivity final : public Activity {
   enum class ViewMode {
     Event,
     Locations,
+    TeamRoster,
+    CompanionDetail,
     LeaveConfirm,
     ReplayConfirm
   };
@@ -25,10 +27,17 @@ class PocketReaderGameActivity final : public Activity {
   int selectedLocationPosition = 0;
   int pendingTargetLocation = -1;
 
+  ViewMode rosterReturnMode = ViewMode::Event;
+  int rosterSelection = 0;
+  int reservePage = 0;
+  int swapSourceSelection = -1;
+  int detailRosterIndex = -1;
+
   void initializeGameIfNeeded();
   void ensureReadyEvent();
 
   void addDevelopmentPages();
+  void addDevelopmentPagesFromLocations();
 
   void showCurrentEvent();
   bool drawEventBitmap(const char* path);
@@ -39,6 +48,15 @@ class PocketReaderGameActivity final : public Activity {
   void showLocations();
   void moveLocationSelection(int delta);
   void chooseSelectedLocation();
+
+  void showTeamRoster(ViewMode returnMode);
+  void moveRosterSelection(int delta);
+  void changeReservePage(int delta);
+  void beginOrCompleteSwap();
+  void cancelSwap();
+  void openSelectedCompanionDetail();
+  int selectedRosterIndex() const;
+  void returnFromRoster();
 
   void showLeaveConfirmation(int targetLocation);
   void confirmLeaveAndSwitch();
@@ -52,6 +70,8 @@ class PocketReaderGameActivity final : public Activity {
   void setNoStepsEvent();
 
   void drawLocationsScreen();
+  void drawTeamRosterScreen();
+  void drawCompanionDetailScreen();
   void drawLeaveConfirmScreen();
   void drawReplayConfirmScreen();
 };
