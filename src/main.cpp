@@ -397,9 +397,13 @@ if (!Storage.begin()) {
   LOG_ERR("MAIN", "SD card initialization failed");
   setupDisplayAndFonts(isSilentReboot);
 
-  activityManager.goToFullScreenMessage(
-      "POCKET TESTBED",
-      EpdFontFamily::BOLD);
+#if FREEINK_DEVICE_POCKETTEST
+  activityManager.replaceActivity(
+      std::make_unique<PocketPrototypeActivity>(renderer, mappedInputManager));
+  activityManager.requestUpdateAndWait();
+#else
+  activityManager.goToFullScreenMessage("SD card error", EpdFontFamily::BOLD);
+#endif
 
   return;
 }
