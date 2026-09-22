@@ -11,6 +11,31 @@
 // Global HalGPIO instance
 HalGPIO gpio;
 
+#if FREEINK_DEVICE_POCKETTEST
+
+namespace PocketTestbedGPIO {
+
+constexpr int8_t SIDE2_UP = 42;
+constexpr int8_t SIDE2_DOWN = 41;
+
+uint8_t readSecondarySideButtons() {
+  uint8_t state = 0;
+
+  if (digitalRead(SIDE2_UP) == LOW) {
+    state |= static_cast<uint8_t>(1u << InputManager::BTN_UP);
+  }
+
+  if (digitalRead(SIDE2_DOWN) == LOW) {
+    state |= static_cast<uint8_t>(1u << InputManager::BTN_DOWN);
+  }
+
+  return state;
+}
+
+}  // namespace PocketTestbedGPIO
+
+#endif
+
 namespace X3GPIO {
 
 bool readI2CReg16LE(uint8_t addr, uint8_t reg, uint16_t* outValue) {
@@ -136,7 +161,16 @@ void HalGPIO::begin() {
 #else
   _deviceType = DeviceType::X4;
 #endif
-  inputMgr.begin();
+
+#if FREEINK_DEVICE_POCKETTEST
+  pinMode(PocketTestbedGPIO::SIDE2_UP, INPUT_PULLUP);
+pinMode(PocketTestbedGPIO::SIDE2_DOWN, INPUT_PULLUP);
+
+InputManager::setButtonHook(
+    PocketTestbedGPIO::readSecondarySideButtons);
+#endif
+
+inputMgr.begin();
 }
 
 void HalGPIO::update() {
