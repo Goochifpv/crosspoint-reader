@@ -41,6 +41,8 @@
 #include "util/ScreenshotUtil.h"
 #include "util/Timezones.h"
 
+#include <Wire.h>
+
 GfxRenderer renderer(display);
 MappedInputManager mappedInputManager(gpio, renderer);
 ActivityManager activityManager(renderer, mappedInputManager);
@@ -494,6 +496,20 @@ if (!Storage.begin()) {
   bool needsWakeRefresh = false;
 
   setupDisplayAndFonts(resume != BootResume::Splash);
+#if FREEINK_DEVICE_POCKETTEST
+  if (halClock.isAvailable()) {
+    activityManager.goToFullScreenMessage(
+        "RTC FOUND",
+        EpdFontFamily::BOLD);
+  } else {
+    activityManager.goToFullScreenMessage(
+        "RTC NOT FOUND",
+        EpdFontFamily::BOLD);
+  }
+
+  activityManager.requestUpdateAndWait();
+  return;
+#endif
 
   switch (resume) {
     case BootResume::Silent:
