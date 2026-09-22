@@ -497,19 +497,59 @@ if (!Storage.begin()) {
 
   setupDisplayAndFonts(resume != BootResume::Splash);
 #if FREEINK_DEVICE_POCKETTEST
-  if (halClock.isAvailable()) {
-    activityManager.goToFullScreenMessage(
-        "RTC FOUND",
-        EpdFontFamily::BOLD);
-  } else {
-    activityManager.goToFullScreenMessage(
-        "RTC NOT FOUND",
-        EpdFontFamily::BOLD);
-  }
+  Wire.begin(39, 40);
+  Wire.setClock(100000);
+  delay(100);
+
+  const uint8_t LIS3DH_ADDR = 0x18;
+
+  // Enable X, Y and Z axes at 100 Hz.
+  Wire.beginTransmission(LIS3DH_ADDR);
+  Wire.write(0x20);  // CTRL_REG1
+  Wire.write(0x57);
+  Wire.endTransmission();
+
+  delay(100);
+
+  auto readAxis = [&](uint8_t reg) -> int16_t {
+    Wire.beginTransmission(LIS3DH_ADDR);
+    Wire.write(reg | 0x80);  // auto-increment
+    Wire.endTransmission(false);
+
+    Wire.requestFrom(LIS3DH_ADDR, (uint8_t)2);
+
+    if (Wire.available() < 2) {
+      return 0;
+    }
+
+    uint8_t low = Wire.read();
+    uint8_t high = Wire.read();
+
+    return (int16_t)((high << 8) | low);
+  };
+
+  int16_t x = readAxis(0x28);
+  int16_t y = readAxis(0x2A);
+  int16_t z = readAxis(0x2C);
+
+  char message[100];
+
+  snprintf(
+      message,
+      sizeof(message),
+      "LIS3DH LIVE\n\nX: %d\nY: %d\nZ: %d",
+      x,
+      y,
+      z);
+
+  activityManager.goToFullScreenMessage(
+      message,
+      EpdFontFamily::BOLD);
 
   activityManager.requestUpdateAndWait();
   return;
 #endif
+
 
   switch (resume) {
     case BootResume::Silent:
