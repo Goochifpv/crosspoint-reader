@@ -41,8 +41,6 @@
 #include "util/ScreenshotUtil.h"
 #include "util/Timezones.h"
 
-#include <Wire.h>
-
 GfxRenderer renderer(display);
 MappedInputManager mappedInputManager(gpio, renderer);
 ActivityManager activityManager(renderer, mappedInputManager);
@@ -496,26 +494,6 @@ if (!Storage.begin()) {
   bool needsWakeRefresh = false;
 
   setupDisplayAndFonts(resume != BootResume::Splash);
-#if FREEINK_DEVICE_POCKETTEST
-  pinMode(21, INPUT_PULLUP);
-  delay(100);
-
-  int powerButtonState = digitalRead(21);
-
-  if (powerButtonState == LOW) {
-    activityManager.goToFullScreenMessage(
-        "POWER BUTTON\n\nPRESSED",
-        EpdFontFamily::BOLD);
-  } else {
-    activityManager.goToFullScreenMessage(
-        "POWER BUTTON\n\nRELEASED",
-        EpdFontFamily::BOLD);
-  }
-
-  activityManager.requestUpdateAndWait();
-  return;
-#endif
-
 
   switch (resume) {
     case BootResume::Silent:
